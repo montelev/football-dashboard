@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Football Player Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --surface2: #22263a;
+      --border:   #2e3347;
+      --text:     #e8eaf0;
+      --muted:    #7b8099;
+      --accent:   #4f8ef7;
+      --accent2:  #a78bfa;
+      --green:    #34d399;
+      --yellow:   #fbbf24;
+      --red:      #f87171;
+      --radius:   10px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Layout ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    header .badge {
+      width: 38px; height: 38px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    header .badge svg { width: 22px; height: 22px; }
+    header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em; }
+    header .season { color: var(--muted); font-size: 0.85rem; margin-left: auto; }
+
+    /* ── API bar ── */
+    .api-bar {
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 32px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .api-bar label { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
+    .api-input {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 7px;
+      font-size: 0.85rem;
+      outline: none;
+      width: 260px;
+      font-family: monospace;
+    }
+    .api-input:focus { border-color: var(--accent); }
+    .api-input::placeholder { color: var(--muted); }
+    .api-select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 28px 6px 10px;
+      border-radius: 7px;
+      font-size: 0.85rem;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237b8099' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 9px center;
+    }
+    .api-select:focus { border-color: var(--accent); }
+    .api-select option { background: var(--surface2); }
+    .btn-fetch {
+      background: var(--accent);
+      border: none;
+      color: #fff;
+      padding: 6px 16px;
+      border-radius: 7px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      white-space: nowrap;
+    }
+    .btn-fetch:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-fetch svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .api-status {
+      font-size: 0.78rem;
+      padding: 3px 10px;
+      border-radius: 5px;
+      display: none;
+    }
+    .api-status.ok    { display: inline-block; color: var(--green);  background: #0e2a1e; border: 1px solid #1a4a2e; }
+    .api-status.err   { display: inline-block; color: var(--red);    background: #2a0e0e; border: 1px solid #4a1e1e; }
+    .api-status.info  { display: inline-block; color: var(--yellow); background: #2a200e; border: 1px solid #4a380e; }
+    .api-hint {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-left: auto;
+    }
+    .api-hint a { color: var(--accent); text-decoration: none; }
+    .api-hint a:hover { text-decoration: underline; }
+    .data-source-badge {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+    .badge-csv  { background: #1a2f24; color: var(--green);  border: 1px solid #2a4f3a; }
+    .badge-live { background: #1a2540; color: var(--accent); border: 1px solid #2a4060; }
+    /* spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { animation: spin 0.8s linear infinite; display: inline-block; }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 24px 60px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    /* ── Section titles ── */
+    .section-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    /* ── Player selector ── */
+    .selector-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .selector-row label { font-size: 0.85rem; color: var(--muted); }
+    select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 9px 14px;
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      cursor: pointer;
+      outline: none;
+      min-width: 240px;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237b8099' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 34px;
+    }
+    select:focus { border-color: var(--accent); }
+    select option { background: var(--surface2); }
+
+    /* ── Player profile banner ── */
+    .player-banner {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+    .avatar {
+      width: 58px; height: 58px;
+      border-radius: 50%;
+      background: var(--surface2);
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: var(--accent);
+      flex-shrink: 0;
+      letter-spacing: -1px;
+    }
+    .player-meta h2 { font-size: 1.15rem; font-weight: 700; }
+    .player-meta p  { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
+    .pos-badge {
+      margin-left: auto;
+      padding: 5px 14px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .pos-Forward  { background: #2a1f3d; color: var(--accent2); border: 1px solid #4a3060; }
+    .pos-Midfielder{ background: #1a2a3d; color: var(--accent);  border: 1px solid #2a4060; }
+    .pos-Defender { background: #1a2f24; color: var(--green);   border: 1px solid #2a4f3a; }
+
+    /* ── Stat cards ── */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 14px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 3px;
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+    .card.c-goals::before    { background: var(--accent2); }
+    .card.c-assists::before  { background: var(--accent);  }
+    .card.c-apps::before     { background: var(--green);   }
+    .card.c-minutes::before  { background: var(--yellow);  }
+    .card.c-pass::before     { background: var(--red);     }
+
+    .card-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 8px; }
+    .card-value { font-size: 2rem; font-weight: 800; line-height: 1; letter-spacing: -0.03em; }
+    .card-unit  { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+
+    /* ── Chart section ── */
+    .chart-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+    .chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .chart-toggle { display: flex; gap: 6px; }
+    .chart-toggle button {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 5px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: none;
+    }
+    .chart-toggle button.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* Bar chart */
+    #bar-chart { width: 100%; overflow: hidden; }
+    .bar-row {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 14px;
+    }
+    .bar-label { font-size: 0.8rem; color: var(--muted); width: 120px; text-align: right; flex-shrink: 0; }
+    .bar-track { flex: 1; background: var(--surface2); border-radius: 4px; height: 22px; overflow: hidden; }
+    .bar-fill  {
+      height: 100%; border-radius: 4px;
+      display: flex; align-items: center;
+      padding-left: 8px;
+      font-size: 0.78rem; font-weight: 700;
+      min-width: 32px;
+      transition: width 0.4s cubic-bezier(.4,0,.2,1);
+    }
+    .bar-0 { background: linear-gradient(90deg, #5b4cba, #a78bfa); }
+    .bar-1 { background: linear-gradient(90deg, #1e5fcf, #4f8ef7); }
+    .bar-2 { background: linear-gradient(90deg, #13875a, #34d399); }
+    .bar-3 { background: linear-gradient(90deg, #a07814, #fbbf24); }
+    .bar-4 { background: linear-gradient(90deg, #b83030, #f87171); }
+
+    /* Radar chart (SVG) */
+    #radar-chart { display: none; }
+    #radar-svg { display: block; margin: 0 auto; }
+
+    /* ── Table section ── */
+    .table-controls {
+      display: flex; gap: 12px; flex-wrap: wrap;
+      margin-bottom: 14px;
+      align-items: center;
+    }
+    .search-wrap {
+      position: relative; flex: 1; min-width: 200px; max-width: 320px;
+    }
+    .search-icon {
+      position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+      color: var(--muted); pointer-events: none;
+    }
+    input[type="search"] {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px 8px 34px;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      outline: none;
+    }
+    input[type="search"]:focus { border-color: var(--accent); }
+    input[type="search"]::placeholder { color: var(--muted); }
+    .row-count { font-size: 0.82rem; color: var(--muted); margin-left: auto; }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+    table {
+      width: 100%; border-collapse: collapse; font-size: 0.88rem;
+    }
+    thead tr { background: var(--surface2); }
+    th {
+      padding: 11px 14px;
+      text-align: left;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    th:hover { color: var(--text); }
+    th.sort-asc::after  { content: " ↑"; color: var(--accent); }
+    th.sort-desc::after { content: " ↓"; color: var(--accent); }
+    tbody tr {
+      border-top: 1px solid var(--border);
+      transition: none;
+    }
+    tbody tr:hover { background: var(--surface2); }
+    td { padding: 10px 14px; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .pos-chip {
+      font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 10px;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .no-results {
+      text-align: center; padding: 32px; color: var(--muted); font-size: 0.9rem;
+    }
+
+    /* ── AI Insights panel ── */
+    .insights-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-top: 16px;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .insights-icon {
+      flex-shrink: 0;
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      background: #1e2540;
+      border: 1px solid #2e3a5a;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .insights-icon svg { width: 18px; height: 18px; }
+    .insights-body { flex: 1; min-width: 0; }
+    .insights-body h3 {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+    .insights-sentences {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .insight-line {
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+    .insight-line .pip {
+      flex-shrink: 0;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      margin-top: 7px;
+    }
+    .pip-strength { background: var(--green); }
+    .pip-weakness { background: var(--red); }
+    .pip-neutral  { background: var(--muted); }
+    .insight-kw { font-weight: 600; }
+    .kw-strength { color: var(--green); }
+    .kw-weakness { color: var(--red); }
+    .kw-neutral  { color: var(--yellow); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="badge">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M12 2a10 10 0 0 1 6.9 2.76M12 2a10 10 0 0 0-6.9 2.76"/>
+      <path d="M2.46 8.5h19.08M2.46 15.5h19.08"/>
+      <path d="M12 2v20M4.93 4.93l4.24 4.24M14.83 9.17l4.24-4.24M4.93 19.07l4.24-4.24M14.83 14.83l4.24 4.24"/>
+    </svg>
+  </div>
+  <h1>Football Dashboard</h1>
+  <span class="season">Season 2024–25 <span id="data-source-badge" class="data-source-badge badge-csv">CSV</span></span>
+</header>
+
+<!-- API fetch bar -->
+<div class="api-bar" id="api-bar">
+  <label for="api-key-input">API-Football key</label>
+  <input type="password" id="api-key-input" class="api-input" placeholder="Paste your api-sports.io key…" autocomplete="off" />
+
+  <label for="api-league-select">League</label>
+  <select id="api-league-select" class="api-select">
+    <option value="39" selected>Premier League</option>
+    <option value="140">La Liga</option>
+    <option value="135">Serie A</option>
+    <option value="78">Bundesliga</option>
+    <option value="61">Ligue 1</option>
+  </select>
+
+  <label for="api-season-input">Season</label>
+  <input type="number" id="api-season-input" class="api-input" style="width:80px" value="2023" min="2010" max="2030" />
+
+  <button class="btn-fetch" id="btn-fetch">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+      <path d="M3 12a9 9 0 0 1 15-6.7M21 12a9 9 0 0 1-15 6.7"/>
+      <polyline points="16 5 21 5 21 10"/>
+      <polyline points="8 19 3 19 3 14"/>
+    </svg>
+    Fetch Live Data
+  </button>
+
+  <span id="api-status" class="api-status"></span>
+  <span class="api-hint">Free tier: 100 req/day &mdash; <a href="https://dashboard.api-football.com/register" target="_blank" rel="noopener">Get a key</a></span>
+</div>
+
+<main>
+
+  <!-- Player Selector -->
+  <section id="section-profile">
+    <p class="section-title">Player Profile</p>
+    <div class="selector-row">
+      <label for="player-select">Select player</label>
+      <select id="player-select"></select>
+    </div>
+
+    <div style="margin-top:14px;">
+      <div class="player-banner" id="player-banner">
+        <div class="avatar" id="player-avatar">—</div>
+        <div class="player-meta">
+          <h2 id="player-name">—</h2>
+          <p id="player-team">—</p>
+        </div>
+        <span class="pos-badge" id="player-pos">—</span>
+      </div>
+    </div>
+
+    <!-- Stat Cards -->
+    <div class="cards-grid" style="margin-top:16px;" id="cards">
+      <div class="card c-goals">
+        <div class="card-label">Goals</div>
+        <div class="card-value" id="c-goals">—</div>
+      </div>
+      <div class="card c-assists">
+        <div class="card-label">Assists</div>
+        <div class="card-value" id="c-assists">—</div>
+      </div>
+      <div class="card c-apps">
+        <div class="card-label">Appearances</div>
+        <div class="card-value" id="c-apps">—</div>
+      </div>
+      <div class="card c-minutes">
+        <div class="card-label">Minutes</div>
+        <div class="card-value" id="c-minutes">—</div>
+        <div class="card-unit">played</div>
+      </div>
+      <div class="card c-pass">
+        <div class="card-label">Pass Accuracy</div>
+        <div class="card-value" id="c-pass">—</div>
+        <div class="card-unit">%</div>
+      </div>
+    </div>
+
+    <!-- AI Insights -->
+    <div class="insights-panel" id="insights-panel">
+      <div class="insights-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#4f8ef7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+      </div>
+      <div class="insights-body">
+        <h3>AI Insights</h3>
+        <div class="insights-sentences" id="insights-sentences"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Chart -->
+  <section id="section-chart">
+    <p class="section-title">Stats Visualisation</p>
+    <div class="chart-panel">
+      <div class="chart-header">
+        <span style="font-size:0.9rem;font-weight:600;" id="chart-player-label">Player stats</span>
+        <div class="chart-toggle">
+          <button id="btn-bar" class="active" onclick="setChart('bar')">Bar</button>
+          <button id="btn-radar" onclick="setChart('radar')">Radar</button>
+        </div>
+      </div>
+      <div id="bar-chart"></div>
+      <div id="radar-chart">
+        <svg id="radar-svg" width="340" height="340" viewBox="0 0 340 340"></svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- Table -->
+  <section id="section-table">
+    <p class="section-title">All Players</p>
+    <div class="table-controls">
+      <div class="search-wrap">
+        <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="search" id="search-box" placeholder="Search name or team…" />
+      </div>
+      <span class="row-count" id="row-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table id="players-table">
+        <thead>
+          <tr>
+            <th data-col="name">Name</th>
+            <th data-col="team">Team</th>
+            <th data-col="position">Pos</th>
+            <th data-col="goals" class="num">Goals</th>
+            <th data-col="assists" class="num">Assists</th>
+            <th data-col="appearances" class="num">Apps</th>
+            <th data-col="minutes" class="num">Mins</th>
+            <th data-col="pass_accuracy" class="num">Pass%</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<script>
+/* ══════════════════════════════════════════════
+   CSV loader
+══════════════════════════════════════════════ */
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',').map(h => h.trim());
+  return lines.slice(1).map(line => {
+    const vals = line.split(',').map(v => v.trim());
+    const obj = {};
+    headers.forEach((h, i) => {
+      const v = vals[i] ?? '';
+      obj[h] = isNaN(v) || v === '' ? v : Number(v);
+    });
+    return obj;
+  });
+}
+
+/* ══════════════════════════════════════════════
+   State
+══════════════════════════════════════════════ */
+let allPlayers = [];
+let sortCol = 'goals';
+let sortDir = 'desc';
+let query   = '';
+let chartMode = 'bar';
+let currentPlayer = null;
+
+/* ══════════════════════════════════════════════
+   Bootstrap
+══════════════════════════════════════════════ */
+fetch('players.csv')
+  .then(r => {
+    if (!r.ok) throw new Error('Could not load players.csv');
+    return r.text();
+  })
+  .then(text => {
+    allPlayers = parseCSV(text);
+    initDropdown();
+    initTable();
+    selectPlayer(allPlayers[0]);
+  })
+  .catch(err => {
+    document.querySelector('main').innerHTML =
+      `<div style="padding:40px;text-align:center;color:#f87171;">
+         <strong>Error:</strong> ${err.message}<br>
+         <small style="color:#7b8099">Make sure players.csv is in the same folder and you're serving via a local server (e.g. Live Server).</small>
+       </div>`;
+  });
+
+/* ══════════════════════════════════════════════
+   API-Football integration
+══════════════════════════════════════════════ */
+
+// Restore saved key on load
+(function () {
+  const saved = localStorage.getItem('apifootball_key');
+  if (saved) document.getElementById('api-key-input').value = saved;
+})();
+
+// Map API-Football position strings → our three categories
+function mapPosition(pos) {
+  if (!pos) return 'Midfielder';
+  const p = pos.toLowerCase();
+  if (p === 'attacker' || p === 'forward') return 'Forward';
+  if (p === 'defender')                    return 'Defender';
+  return 'Midfielder'; // Midfielder, Goalkeeper all map here
+}
+
+// Convert one API player response object → our schema
+function mapApiPlayer(entry) {
+  const pl    = entry.player;
+  const stats = (entry.statistics || [])[0] || {};
+  const goals = stats.goals  || {};
+  const games = stats.games  || {};
+  const passes= stats.passes || {};
+
+  return {
+    name:          pl.name || pl.firstname + ' ' + pl.lastname,
+    team:          (stats.team && stats.team.name) || 'Unknown',
+    position:      mapPosition(games.position),
+    goals:         goals.total        ?? 0,
+    assists:       goals.assists      ?? 0,
+    appearances:   games.appearences  ?? 0,   // note: API typo
+    minutes:       games.minutes      ?? 0,
+    pass_accuracy: passes.accuracy    ?? 0,
+    _source:       'live',
+  };
+}
+
+function setApiStatus(type, msg) {
+  const el = document.getElementById('api-status');
+  el.className = 'api-status ' + type;
+  el.textContent = msg;
+}
+
+function setDataBadge(type) {
+  const badge = document.getElementById('data-source-badge');
+  if (type === 'live') {
+    badge.textContent = 'LIVE';
+    badge.className   = 'data-source-badge badge-live';
+  } else {
+    badge.textContent = 'CSV';
+    badge.className   = 'data-source-badge badge-csv';
+  }
+}
+
+async function fetchFromAPI() {
+  const keyInput    = document.getElementById('api-key-input');
+  const leagueInput = document.getElementById('api-league-select');
+  const seasonInput = document.getElementById('api-season-input');
+  const btn         = document.getElementById('btn-fetch');
+
+  const key    = keyInput.value.trim();
+  const league = leagueInput.value;
+  const season = seasonInput.value.trim();
+
+  if (!key) {
+    setApiStatus('err', 'Paste your API key first.');
+    keyInput.focus();
+    return;
+  }
+
+  localStorage.setItem('apifootball_key', key);
+
+  const SPINNER_HTML = `<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/>
+  </svg> Fetching…`;
+  const IDLE_HTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+    <path d="M3 12a9 9 0 0 1 15-6.7M21 12a9 9 0 0 1-15 6.7"/>
+    <polyline points="16 5 21 5 21 10"/>
+    <polyline points="8 19 3 19 3 14"/>
+  </svg> Fetch Live Data`;
+
+  btn.disabled = true;
+  btn.innerHTML = SPINNER_HTML;
+
+  // Helper: fetch one endpoint and return its response array (or throw with context)
+  async function fetchEndpoint(type) {
+    const endpoint = type === 'scorers' ? 'topscorers' : 'topassists';
+    setApiStatus('info', `Fetching top ${type}…`);
+    const url = `https://v3.football.api-sports.io/players/${endpoint}?league=${league}&season=${season}`;
+    const res = await fetch(url, {
+      headers: {
+        'x-apisports-key': key,
+        'x-rapidapi-key':  key,
+      },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status} on ${endpoint} — check your API key and quota.`);
+    const json = await res.json();
+    if (json.errors && Object.keys(json.errors).length) {
+      throw new Error(Object.values(json.errors)[0]);
+    }
+    return json.response || [];
+  }
+
+  try {
+    // Fire both requests; well within the 10 req/min free-tier limit
+    const [scorersRaw, assistsRaw] = await Promise.all([
+      fetchEndpoint('scorers'),
+      fetchEndpoint('assists'),
+    ]);
+
+    setApiStatus('info', 'Merging and deduplicating…');
+
+    // De-duplicate by player id; scorers list takes precedence (richer goal data)
+    const seen   = new Map();   // playerId → mapped player object
+    const filter = entry => {
+      const pos = entry.statistics?.[0]?.games?.position;
+      const p   = mapApiPlayer(entry);
+      return pos !== 'Goalkeeper' && p.appearances > 0;
+    };
+
+    for (const entry of scorersRaw) {
+      if (filter(entry)) seen.set(entry.player.id, mapApiPlayer(entry));
+    }
+    for (const entry of assistsRaw) {
+      if (!seen.has(entry.player.id) && filter(entry)) {
+        seen.set(entry.player.id, mapApiPlayer(entry));
+      }
+    }
+
+    const fetched = Array.from(seen.values());
+    if (fetched.length === 0) {
+      throw new Error('No player data returned — the league or season may not be available on the free tier.');
+    }
+
+    // Replace dashboard data and rebuild UI
+    allPlayers = fetched;
+    sortCol = 'goals';
+    sortDir = 'desc';
+    query   = '';
+
+    const sel = document.getElementById('player-select');
+    sel.innerHTML = '';
+    allPlayers.forEach((p, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `${p.name} — ${p.team}`;
+      sel.appendChild(opt);
+    });
+
+    renderTable();
+    selectPlayer(allPlayers[0]);
+    setDataBadge('live');
+    setApiStatus('ok', `${allPlayers.length} players loaded (top scorers + top assists).`);
+
+  } catch (err) {
+    // Fall back to CSV data so the dashboard stays usable
+    setApiStatus('err', `${err.message} — showing CSV data.`);
+    setDataBadge('csv');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = IDLE_HTML;
+  }
+}
+
+document.getElementById('btn-fetch').addEventListener('click', fetchFromAPI);
+
+/* ══════════════════════════════════════════════
+   Dropdown
+══════════════════════════════════════════════ */
+function initDropdown() {
+  const sel = document.getElementById('player-select');
+  allPlayers.forEach((p, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `${p.name} — ${p.team}`;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', () => {
+    selectPlayer(allPlayers[+sel.value]);
+  });
+}
+
+/* ══════════════════════════════════════════════
+   Profile + Cards
+══════════════════════════════════════════════ */
+function selectPlayer(p) {
+  currentPlayer = p;
+  // Avatar initials (handle accented names gracefully)
+  const parts = p.name.replace(/[^a-zA-ZÀ-ÿ\s]/g, '').trim().split(/\s+/);
+  const initials = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : p.name.substring(0, 2).toUpperCase();
+
+  document.getElementById('player-avatar').textContent = initials;
+  document.getElementById('player-name').textContent   = p.name;
+  document.getElementById('player-team').textContent   = p.team;
+
+  const posBadge = document.getElementById('player-pos');
+  posBadge.textContent = p.position;
+  posBadge.className   = 'pos-badge pos-' + p.position;
+
+  document.getElementById('c-goals').textContent   = p.goals;
+  document.getElementById('c-assists').textContent = p.assists;
+  document.getElementById('c-apps').textContent    = p.appearances;
+  document.getElementById('c-minutes').textContent = p.minutes.toLocaleString();
+  document.getElementById('c-pass').textContent    = p.pass_accuracy;
+
+  document.getElementById('chart-player-label').textContent = p.name + ' — Stats Overview';
+  renderInsights(p);
+  renderChart();
+}
+
+/* ══════════════════════════════════════════════
+   AI Insights engine
+══════════════════════════════════════════════ */
+function computeAvgs() {
+  const keys = ['goals', 'assists', 'appearances', 'minutes', 'pass_accuracy'];
+  const avgs = {};
+  keys.forEach(k => {
+    avgs[k] = allPlayers.reduce((s, p) => s + p[k], 0) / allPlayers.length;
+  });
+  return avgs;
+}
+
+// Relative difference: how far the value sits above/below the average (ratio)
+function relDiff(val, avg) {
+  return avg === 0 ? 0 : (val - avg) / avg;
+}
+
+function renderInsights(p) {
+  const avgs = computeAvgs();
+  const pos  = p.position; // Forward | Midfielder | Defender
+  const sentences = [];
+
+  const fmt = (n, d = 1) => Number(n).toFixed(d);
+  const pct = v => Math.round(Math.abs(v) * 100);
+
+  // Thresholds
+  const HIGH = 0.30;
+  const MID  = 0.15;
+
+  function tag(rel) {
+    if (rel >=  HIGH) return 'strength';
+    if (rel <= -HIGH) return 'weakness';
+    if (rel >=  MID)  return 'slight-strength';
+    if (rel <= -MID)  return 'slight-weakness';
+    return 'neutral';
+  }
+
+  // ── Sentence 1: attacking output (goals + assists) ──────────────
+  const goalRel   = relDiff(p.goals,   avgs.goals);
+  const assistRel = relDiff(p.assists, avgs.assists);
+
+  if (pos === 'Defender') {
+    // For defenders, any goals+assists at or above the overall avg is noteworthy
+    if (p.goals + p.assists >= Math.round(avgs.goals + avgs.assists)) {
+      sentences.push({
+        type: 'strength',
+        text: `As a defender, <kw>contributing ${p.goals} goal${p.goals !== 1 ? 's' : ''} and ${p.assists} assist${p.assists !== 1 ? 's' : ''}</kw> is an impressive attacking return — well above what most defenders offer.`,
+      });
+    } else {
+      sentences.push({
+        type: 'neutral',
+        text: `With ${p.goals} goal${p.goals !== 1 ? 's' : ''} and ${p.assists} assist${p.assists !== 1 ? 's' : ''}, ${p.name.split(' ')[0]}'s attacking output is <kw>typical for a defender</kw> — the priority rightly sits at keeping a clean sheet.`,
+      });
+    }
+  } else {
+    const combinedRel = (goalRel + assistRel) / 2;
+    const t = tag(combinedRel);
+    if (t === 'strength' || t === 'slight-strength') {
+      sentences.push({
+        type: 'strength',
+        text: `${p.name.split(' ')[0]} is a <kw>productive ${pos.toLowerCase()}</kw>, with ${p.goals} goals and ${p.assists} assists comfortably above the squad averages of ${fmt(avgs.goals)} and ${fmt(avgs.assists)} respectively.`,
+      });
+    } else if (t === 'weakness' || t === 'slight-weakness') {
+      sentences.push({
+        type: 'weakness',
+        text: `Attacking output is an <kw>area to improve</kw>: ${p.goals} goals and ${p.assists} assists both fall below the averages of ${fmt(avgs.goals)} and ${fmt(avgs.assists)}, which is below par for a ${pos.toLowerCase()}.`,
+      });
+    } else {
+      sentences.push({
+        type: 'neutral',
+        text: `With ${p.goals} goals and ${p.assists} assists, ${p.name.split(' ')[0]} is <kw>performing in line with squad averages</kw> (${fmt(avgs.goals)} goals, ${fmt(avgs.assists)} assists) for a ${pos.toLowerCase()}.`,
+      });
+    }
+  }
+
+  // ── Sentence 2: pass accuracy ────────────────────────────────────
+  const passRel = relDiff(p.pass_accuracy, avgs.pass_accuracy);
+  const passT   = tag(passRel);
+  const passContext = { Forward: 'retaining the ball in advanced areas', Midfielder: 'controlling the tempo of play', Defender: 'playing out from the back' };
+
+  if (passT === 'strength' || passT === 'slight-strength') {
+    sentences.push({
+      type: 'strength',
+      text: `A pass accuracy of <kw>${p.pass_accuracy}%</kw> is ${pct(passRel)}% above the player average (${fmt(avgs.pass_accuracy)}%) — a genuine strength when it comes to <kw>${passContext[pos] ?? 'possession play'}</kw>.`,
+    });
+  } else if (passT === 'weakness' || passT === 'slight-weakness') {
+    sentences.push({
+      type: 'weakness',
+      text: `At <kw>${p.pass_accuracy}% pass accuracy</kw> — ${pct(passRel)}% below the average of ${fmt(avgs.pass_accuracy)}% — improving <kw>ball retention under pressure</kw> would add significant value.`,
+    });
+  } else {
+    sentences.push({
+      type: 'neutral',
+      text: `Pass accuracy of <kw>${p.pass_accuracy}%</kw> sits close to the squad mean of ${fmt(avgs.pass_accuracy)}%, reflecting a <kw>reliable and consistent</kw> presence in possession.`,
+    });
+  }
+
+  // ── Sentence 3: availability and minutes ────────────────────────
+  const appRel      = relDiff(p.appearances, avgs.appearances);
+  const avgMinPG    = Math.round(avgs.minutes / avgs.appearances);
+  const playerMinPG = Math.round(p.minutes / p.appearances);
+  const minPGRel    = relDiff(playerMinPG, avgMinPG);
+
+  if (appRel >= HIGH) {
+    sentences.push({
+      type: 'strength',
+      text: `Making <kw>${p.appearances} appearances</kw> — ${pct(appRel)}% more than the squad average — highlights outstanding <kw>fitness and availability</kw> across the season.`,
+    });
+  } else if (appRel <= -HIGH) {
+    sentences.push({
+      type: 'weakness',
+      text: `Only <kw>${p.appearances} appearances</kw> so far — ${pct(appRel)}% fewer than average — raises questions about <kw>consistency or fitness</kw> that will need addressing.`,
+    });
+  } else if (minPGRel >= MID) {
+    sentences.push({
+      type: 'strength',
+      text: `Averaging <kw>${playerMinPG} minutes per game</kw> (above the squad's ${avgMinPG} average) shows the manager views ${p.name.split(' ')[0]} as a <kw>first-choice starter</kw>.`,
+    });
+  } else if (minPGRel <= -MID) {
+    sentences.push({
+      type: 'neutral',
+      text: `With an average of <kw>${playerMinPG} minutes per game</kw> against a squad average of ${avgMinPG}, ${p.name.split(' ')[0]} is currently <kw>filling a rotation role</kw> rather than starting consistently.`,
+    });
+  } else {
+    sentences.push({
+      type: 'neutral',
+      text: `With <kw>${p.appearances} appearances</kw> totalling ${p.minutes.toLocaleString()} minutes, ${p.name.split(' ')[0]} has been a <kw>regular and dependable</kw> presence in the squad this season.`,
+    });
+  }
+
+  // ── Render sentences ─────────────────────────────────────────────
+  const container = document.getElementById('insights-sentences');
+  container.innerHTML = sentences.map(s => {
+    const pipClass  = (s.type === 'strength' || s.type === 'slight-strength') ? 'pip-strength'
+                    : (s.type === 'weakness' || s.type === 'slight-weakness') ? 'pip-weakness'
+                    : 'pip-neutral';
+    const kwClass   = (s.type === 'strength' || s.type === 'slight-strength') ? 'kw-strength'
+                    : (s.type === 'weakness' || s.type === 'slight-weakness') ? 'kw-weakness'
+                    : 'kw-neutral';
+    const html = s.text.replace(/<kw>(.*?)<\/kw>/g,
+      `<span class="insight-kw ${kwClass}">$1</span>`);
+    return `<div class="insight-line">
+      <span class="pip ${pipClass}"></span>
+      <span>${html}</span>
+    </div>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════
+   Chart
+══════════════════════════════════════════════ */
+window.setChart = function(mode) {
+  chartMode = mode;
+  document.getElementById('btn-bar').classList.toggle('active', mode === 'bar');
+  document.getElementById('btn-radar').classList.toggle('active', mode === 'radar');
+  document.getElementById('bar-chart').style.display   = mode === 'bar'   ? '' : 'none';
+  document.getElementById('radar-chart').style.display = mode === 'radar' ? '' : 'none';
+  renderChart();
+};
+
+// Normalise each stat against the max across all players
+function normalise(stat) {
+  const max = Math.max(...allPlayers.map(p => p[stat]));
+  return max === 0 ? 0 : (currentPlayer[stat] / max) * 100;
+}
+
+const STATS = [
+  { key: 'goals',         label: 'Goals',      cls: 'bar-0' },
+  { key: 'assists',       label: 'Assists',     cls: 'bar-1' },
+  { key: 'appearances',   label: 'Apps',        cls: 'bar-2' },
+  { key: 'minutes',       label: 'Mins',        cls: 'bar-3' },
+  { key: 'pass_accuracy', label: 'Pass %',      cls: 'bar-4' },
+];
+
+function renderChart() {
+  if (!currentPlayer) return;
+  if (chartMode === 'bar') renderBar();
+  else                     renderRadar();
+}
+
+function renderBar() {
+  const el = document.getElementById('bar-chart');
+  el.innerHTML = '';
+  STATS.forEach((s, i) => {
+    const pct = normalise(s.key);
+    const rawVal = currentPlayer[s.key];
+    const display = s.key === 'minutes' ? rawVal.toLocaleString()
+                  : s.key === 'pass_accuracy' ? rawVal + '%'
+                  : rawVal;
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    row.innerHTML = `
+      <span class="bar-label">${s.label}</span>
+      <div class="bar-track">
+        <div class="bar-fill ${s.cls}" style="width:${Math.max(pct, 4)}%">${display}</div>
+      </div>`;
+    el.appendChild(row);
+  });
+}
+
+function renderRadar() {
+  const svg = document.getElementById('radar-svg');
+  svg.innerHTML = '';
+  const cx = 170, cy = 170, r = 120;
+  const n = STATS.length;
+  const levels = 5;
+
+  function polar(angle, radius) {
+    return {
+      x: cx + radius * Math.sin(angle),
+      y: cy - radius * Math.cos(angle),
+    };
+  }
+
+  const angleStep = (Math.PI * 2) / n;
+
+  // Grid rings
+  for (let l = 1; l <= levels; l++) {
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const p = polar(i * angleStep, r * (l / levels));
+      pts.push(`${p.x},${p.y}`);
+    }
+    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    poly.setAttribute('points', pts.join(' '));
+    poly.setAttribute('fill', 'none');
+    poly.setAttribute('stroke', '#2e3347');
+    poly.setAttribute('stroke-width', '1');
+    svg.appendChild(poly);
+  }
+
+  // Axis lines
+  for (let i = 0; i < n; i++) {
+    const p = polar(i * angleStep, r);
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', cx); line.setAttribute('y1', cy);
+    line.setAttribute('x2', p.x); line.setAttribute('y2', p.y);
+    line.setAttribute('stroke', '#2e3347'); line.setAttribute('stroke-width', '1');
+    svg.appendChild(line);
+  }
+
+  // Data polygon
+  const dataPts = [];
+  const colours = ['#a78bfa','#4f8ef7','#34d399','#fbbf24','#f87171'];
+  STATS.forEach((s, i) => {
+    const pct = normalise(s.key) / 100;
+    const p = polar(i * angleStep, r * pct);
+    dataPts.push(`${p.x},${p.y}`);
+  });
+  const dataPoly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  dataPoly.setAttribute('points', dataPts.join(' '));
+  dataPoly.setAttribute('fill', 'rgba(79,142,247,0.18)');
+  dataPoly.setAttribute('stroke', '#4f8ef7');
+  dataPoly.setAttribute('stroke-width', '2');
+  svg.appendChild(dataPoly);
+
+  // Data dots
+  STATS.forEach((s, i) => {
+    const pct = normalise(s.key) / 100;
+    const p = polar(i * angleStep, r * pct);
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', p.x); circle.setAttribute('cy', p.y);
+    circle.setAttribute('r', '5');
+    circle.setAttribute('fill', colours[i]);
+    circle.setAttribute('stroke', '#0f1117');
+    circle.setAttribute('stroke-width', '2');
+    svg.appendChild(circle);
+  });
+
+  // Axis labels
+  STATS.forEach((s, i) => {
+    const p = polar(i * angleStep, r + 22);
+    const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    txt.setAttribute('x', p.x); txt.setAttribute('y', p.y);
+    txt.setAttribute('text-anchor', 'middle');
+    txt.setAttribute('dominant-baseline', 'middle');
+    txt.setAttribute('fill', '#7b8099');
+    txt.setAttribute('font-size', '11');
+    txt.setAttribute('font-family', 'system-ui, sans-serif');
+    txt.textContent = s.label;
+    svg.appendChild(txt);
+  });
+}
+
+/* ══════════════════════════════════════════════
+   Table
+══════════════════════════════════════════════ */
+function initTable() {
+  document.getElementById('search-box').addEventListener('input', e => {
+    query = e.target.value.toLowerCase();
+    renderTable();
+  });
+
+  document.querySelectorAll('#players-table th').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (sortCol === col) {
+        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortCol = col;
+        sortDir = typeof allPlayers[0][col] === 'number' ? 'desc' : 'asc';
+      }
+      renderTable();
+    });
+  });
+
+  renderTable();
+}
+
+const POS_CLASSES = { Forward: 'pos-Forward', Midfielder: 'pos-Midfielder', Defender: 'pos-Defender' };
+const POS_STYLE = {
+  Forward:    'background:#2a1f3d;color:#a78bfa;',
+  Midfielder: 'background:#1a2a3d;color:#4f8ef7;',
+  Defender:   'background:#1a2f24;color:#34d399;',
+};
+
+function renderTable() {
+  const tbody = document.getElementById('table-body');
+  const numericCols = new Set(['goals','assists','appearances','minutes','pass_accuracy']);
+
+  // Filter
+  let rows = allPlayers.filter(p =>
+    p.name.toLowerCase().includes(query) ||
+    p.team.toLowerCase().includes(query) ||
+    p.position.toLowerCase().includes(query)
+  );
+
+  // Sort
+  rows.sort((a, b) => {
+    const av = a[sortCol], bv = b[sortCol];
+    const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv));
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
+
+  // Update header indicators
+  document.querySelectorAll('#players-table th').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+    if (th.dataset.col === sortCol) {
+      th.classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+    }
+  });
+
+  document.getElementById('row-count').textContent =
+    `${rows.length} of ${allPlayers.length} players`;
+
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td class="no-results" colspan="8">No players match your search.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(p => `
+    <tr>
+      <td><strong>${p.name}</strong></td>
+      <td style="color:var(--muted)">${p.team}</td>
+      <td><span class="pos-chip" style="${POS_STYLE[p.position] || ''}">${p.position}</span></td>
+      <td class="num">${p.goals}</td>
+      <td class="num">${p.assists}</td>
+      <td class="num">${p.appearances}</td>
+      <td class="num">${p.minutes.toLocaleString()}</td>
+      <td class="num">${p.pass_accuracy}%</td>
+    </tr>
+  `).join('');
+}
+</script>
+
+</body>
+</html>
